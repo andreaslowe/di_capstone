@@ -1,0 +1,75 @@
+---
+title: "Data Incubator Proposal Plot3"
+output: html_notebook
+---
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, paged.print=TRUE}
+#data incubator proposal using JUST capitol data from 
+#https://blog.thedataincubator.com/2017/04/just-capital-and-data-incubator-challenge/#more-1348
+
+#load required packages
+require(readxl)
+require(GGally)
+require(dplyr)
+
+#read in selected data for health and census information
+health_data_raw <- read_excel("DataInc/JUST_project/HEALTH_DATA.xls", sheet = 4, col_names = TRUE)
+census_raw <- read_excel("DataInc/JUST_project/CENSUS_DATA.xls", col_names = TRUE, skip = 2)
+health_data <- health_data_raw[2:nrow(health_data_raw),-grep("X_", names(health_data_raw))]
+
+#format health data - remove columns with variables that are not needed
+health_data <- health_data_raw[2:nrow(health_data_raw),!grepl("95%|Quartile|#|Unreliable|State|County|Ratio",
+                                       as.character(health_data_raw[1,]))]
+names(health_data) <- health_data_raw[1,!grepl("95%|Quartile|#|Unreliable|State|County|Ratio",
+                                       as.character(health_data_raw[1,]))]
+
+#format census data
+census <- census_raw[2:nrow(census_raw),c(8,23)]
+
+#change poverty so it is percent NOT in poverty
+census$no_poverty <- 100 - as.numeric(unlist(census[,1]))
+names(census) <- c("Percent_Poverty", "No_Poverty", "Income")
+census$FIPS <- paste(unlist(census_raw[,1]), unlist(census_raw[,2]), sep = "")[2:nrow(census_raw)]
+
+#format company data
+companies_raw <- read_excel("DataInc/JUST_project/COMPANY_DATA.xlsx", col_names = TRUE)
+companies <- companies_raw[,c(1,2,3)]
+names(companies) <- c("FIPS", "id", "weight")
+
+#look at health data rankings
+all_data <- merge(companies, health_data, by.x = "FIPS")
+all_data <- merge(all_data, census, by.x = "FIPS")
+
+#remove columns with 10% or greater NAs
+all_data_cleaned <- all_data[,sapply(all_data, function(x) sum(is.na(x))/length(x) < 0.1)]
+
+#change presence of water violation from yes no to 1 or 0
+all_data_cleaned$`Presence of violation` <- ifelse(all_data_cleaned$`Presence of violation` == "Yes", 1, 0)
+
+#change columns from character class to numeric and test for NAs
+all_data_cleaned <- as.data.frame(sapply(all_data_cleaned, as.numeric)) 
+total_na <- sum(!complete.cases(all_data_cleaned)) #7213 rows that aren't complete - will leave data
+
+#average data by county code
+avg_by_FIPS <- aggregate(all_data_cleaned[3:ncol(all_data_cleaned)],list(all_data_cleaned$FIPS), mean, na.action = na.omit)
+
+#rm(list=setdiff(ls(), "avg_by_FIPS"))
+
+#run correlation plots and display correlations between rows
+correlation_matrix <- ggcorr(avg_by_FIPS, label = FALSE, layout.exp = 2) 
+
+#exploratory analysis
+cor_values <- cor(avg_by_FIPS, use = "pairwise.complete.obs")[2,]
+cor_values[cor_values > 0.3]
+
+plot(avg_by_FIPS$weight, avg_by_FIPS$`% With Access`, main = "Access to Excercise Oppurtunities vs Company Presence", xlab = "Company 'Justness'", ylab = "Percent with Acess")
+
+plot(avg_by_FIPS$weight, avg_by_FIPS$`% With Access`, main = "Access to Excercise Oppurtunities vs Company Presence", xlab = "Company 'Justness'", ylab = "Percent with Acess", xlim = c(0,500))
+ 
+ plot(avg_by_FIPS$weight, avg_by_FIPS$Population, main = "Population vs Company Presence", xlab = "Company 'Justness'", ylab = "Adults Age 25-44")
+
+
+ 
+
+```
+
